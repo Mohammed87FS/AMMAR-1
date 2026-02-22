@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">Ammar Maschinen</string>
+    <string name="machine_name">Machine Name</string>
+    <string name="total_products">Total Products</string>
+    <string name="products_per_drop">Products per Drop</string>
+    <string name="time_per_drop_in_seconds">Time per Drop (seconds)</string>
+    <string name="error_all_fields_positive">Please fill all fields with positive numbers.</string>
+    <string name="add_machine">Add Machine</string>
+    <string name="remove">Remove</string>
+    <string name="total_products_label">Total Products:</string>
+    <string name="products_per_drop_label">Products per Drop:</string>
+    <string name="time_per_drop_label">Time per Drop:</string>
+    <string name="number_of_drops_label">Number of Drops:</string>
+    <string name="total_time_label">Total Time:</string>
+    <string name="time_remaining_label">Time Remaining:</string>
+    <string name="finished">Finished</string>
+    <string name="notification_permission_request">This app needs permission to show notifications to alert you when a machine\'s task is complete.</string>
+    <string name="grant_permission">Grant Permission</string>
+    <string name="exact_alarm_permission_request">This app needs a special permission to schedule exact alarms. Please grant it in the system settings.</string>
+    <string name="open_settings">Open Settings</string>
+    <string name="drop_complete_notification_title">%1$s Drop Complete</string>
+    <string name="drop_complete_notification_message">Drop %1$d of %2$d is complete.</string>
+    <string name="machine_finished_notification_title">%1$s Finished</string>
+    <string name="machine_finished_notification_message">All %1$d drops are complete. The machine has finished.</string>
+</resources>
