@@ -30,6 +30,46 @@ class MachinesViewModel(application: Application) : ViewModel() {
         }
     }
 
+    fun reactivateMachine(machine: Machine) {
+        viewModelScope.launch {
+            val updatedMachines = machines.value.map {
+                if (it.id == machine.id) {
+                    it.copy(createdAt = System.currentTimeMillis(), isStopped = false, stoppedAt = null)
+                } else {
+                    it
+                }
+            }
+            repository.saveMachines(updatedMachines)
+        }
+    }
+
+    fun stopMachine(machine: Machine) {
+        viewModelScope.launch {
+            val updatedMachines = machines.value.map {
+                if (it.id == machine.id) {
+                    it.copy(isStopped = true, stoppedAt = System.currentTimeMillis())
+                } else {
+                    it
+                }
+            }
+            repository.saveMachines(updatedMachines)
+        }
+    }
+
+    fun resumeMachine(machine: Machine) {
+        viewModelScope.launch {
+            val updatedMachines = machines.value.map {
+                if (it.id == machine.id && it.stoppedAt != null) {
+                    val stoppedDuration = System.currentTimeMillis() - it.stoppedAt
+                    it.copy(isStopped = false, stoppedAt = null, createdAt = it.createdAt + stoppedDuration)
+                } else {
+                    it
+                }
+            }
+            repository.saveMachines(updatedMachines)
+        }
+    }
+
     class Factory(private val application: Application) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(MachinesViewModel::class.java)) {

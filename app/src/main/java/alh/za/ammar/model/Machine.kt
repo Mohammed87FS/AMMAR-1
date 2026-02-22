@@ -9,5 +9,7 @@ data class Machine(
     val name: String,
     val totalProducts: Int,
     val productsPerDrop: Int,
-    val timePerDropInSeconds: Double
+    val timePerDropInSeconds: Double,
+    val isStopped: Boolean = false,
+    val stoppedAt: Long? = null
 )

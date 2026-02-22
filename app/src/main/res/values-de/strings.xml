@@ -1,15 +1,18 @@
 <resources>
     <string name="app_name">Ammar Maschinen</string>
     <string name="machine_name">Maschinenname</string>
-    <string name="total_products">Gesamtanzahl der Produkte</string>
-    <string name="products_per_drop">Produkte pro Tropfen</string>
-    <string name="time_per_drop_in_seconds">Zeit pro Tropfen (Sekunden)</string>
+    <string name="total_products">Stückanzahl</string>
+    <string name="products_per_drop">Kavitäten</string>
+    <string name="time_per_drop_in_seconds">Zykluszeit (sekunden)</string>
     <string name="error_all_fields_positive">Bitte füllen Sie alle Felder mit positiven Zahlen aus.</string>
     <string name="add_machine">Maschine hinzufügen</string>
     <string name="remove">Entfernen</string>
-    <string name="total_products_label">Gesamtanzahl der Produkte:</string>
-    <string name="products_per_drop_label">Produkte pro Tropfen:</string>
-    <string name="time_per_drop_label">Zeit pro Tropfen:</string>
+    <string name="reactivate">Reaktivieren</string>
+    <string name="stop">Stopp</string>
+    <string name="resume">Fortsetzen</string>
+    <string name="total_products_label">Stückanzahl:</string>
+    <string name="products_per_drop_label">Kavitäten:</string>
+    <string name="time_per_drop_label">Zykluszeit:</string>
     <string name="number_of_drops_label">Anzahl der Tropfen:</string>
     <string name="total_time_label">Gesamtzeit:</string>
     <string name="time_remaining_label">Verbleibende Zeit:</string>

@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -35,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +51,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import alh.za.ammar.R
 import alh.za.ammar.model.Machine
 import alh.za.ammar.notification.AlarmReceiver
+import alh.za.ammar.ui.theme.Orange
 import alh.za.ammar.viewmodel.MachinesViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -194,7 +197,7 @@ private fun MainContent(viewModel: MachinesViewModel, modifier: Modifier = Modif
     ) {
         AddMachineForm(onAddMachine = {
             viewModel.addMachine(it)
-            scheduleInitialAlarm(context, it)
+            scheduleFinalAlarm(context, it)
         })
         Spacer(modifier = Modifier.height(16.dp))
         LazyColumn(
@@ -202,10 +205,19 @@ private fun MainContent(viewModel: MachinesViewModel, modifier: Modifier = Modif
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(machines) { machine ->
-                MachineItem(machine = machine, onRemove = {
-                    viewModel.removeMachine(machine)
-                    cancelAlarm(context, machine)
-                })
+                MachineItem(
+                    machine = machine, 
+                    onRemove = {
+                        viewModel.removeMachine(machine)
+                        cancelAlarm(context, machine)
+                    },
+                    onReactivate = {
+                        viewModel.reactivateMachine(machine)
+                        scheduleFinalAlarm(context, machine)
+                    },
+                    onStop = { viewModel.stopMachine(machine) },
+                    onResume = { viewModel.resumeMachine(machine) }
+                )
             }
         }
     }
@@ -275,18 +287,36 @@ private fun AddMachineForm(onAddMachine: (Machine) -> Unit) {
 }
 
 @Composable
-private fun MachineItem(machine: Machine, onRemove: () -> Unit) {
+private fun MachineItem(
+    machine: Machine,
+    onRemove: () -> Unit,
+    onReactivate: () -> Unit,
+    onStop: () -> Unit,
+    onResume: () -> Unit
+) {
     val numberOfDrops = if (machine.productsPerDrop > 0) machine.totalProducts / machine.productsPerDrop else 0
     val timePerDrop = (machine.timePerDropInSeconds * 1000).toLong()
     val totalTime = numberOfDrops * timePerDrop
 
-    var timeRemaining by remember { mutableLongStateOf(totalTime) }
+    var timeRemaining by remember(machine) { mutableLongStateOf(totalTime) }
 
-    LaunchedEffect(key1 = machine.id) {
-        while (timeRemaining > 0) {
-            val elapsedTime = System.currentTimeMillis() - machine.createdAt
+    LaunchedEffect(key1 = machine) {
+        if (!machine.isStopped) {
+            val elapsedTime = if (machine.stoppedAt != null) {
+                machine.stoppedAt - machine.createdAt
+            } else {
+                System.currentTimeMillis() - machine.createdAt
+            }
             timeRemaining = (totalTime - elapsedTime).coerceAtLeast(0)
-            delay(1000)
+            while (timeRemaining > 0) {
+                delay(1000)
+                val newElapsedTime = if (machine.stoppedAt != null) {
+                    machine.stoppedAt - machine.createdAt
+                } else {
+                    System.currentTimeMillis() - machine.createdAt
+                }
+                timeRemaining = (totalTime - newElapsedTime).coerceAtLeast(0)
+            }
         }
     }
 
@@ -294,8 +324,36 @@ private fun MachineItem(machine: Machine, onRemove: () -> Unit) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text(machine.name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = onRemove) {
-                    Text(stringResource(R.string.remove))
+                Row {
+                    Button(
+                        onClick = onRemove,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    ) {
+                        Text(stringResource(R.string.remove))
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (timeRemaining <= 0) {
+                        Button(
+                            onClick = onReactivate,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
+                        ) {
+                            Text(stringResource(R.string.reactivate))
+                        }
+                    } else if (machine.isStopped) {
+                        Button(
+                            onClick = onResume,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
+                        ) {
+                            Text(stringResource(R.string.resume))
+                        }
+                    } else {
+                        Button(
+                            onClick = onStop,
+                            colors = ButtonDefaults.buttonColors(containerColor = Orange)
+                        ) {
+                            Text(stringResource(R.string.stop))
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -327,18 +385,19 @@ private fun MachineItem(machine: Machine, onRemove: () -> Unit) {
     }
 }
 
-private fun scheduleInitialAlarm(context: Context, machine: Machine) {
+private fun scheduleFinalAlarm(context: Context, machine: Machine) {
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
         return
     }
 
+    val numberOfDrops = if (machine.productsPerDrop > 0) machine.totalProducts / machine.productsPerDrop else 0
     val timePerDrop = (machine.timePerDropInSeconds * 1000).toLong()
-    val triggerTime = System.currentTimeMillis() + timePerDrop
+    val totalTime = numberOfDrops * timePerDrop
+    val triggerTime = System.currentTimeMillis() + totalTime
 
     val intent = Intent(context, AlarmReceiver::class.java).apply {
         putExtra("machine_json", Gson().toJson(machine))
-        putExtra("current_drop", 1)
     }
 
     val pendingIntent = PendingIntent.getBroadcast(
