@@ -19,6 +19,8 @@ class AlarmReceiver : BroadcastReceiver() {
 
         val finalTitle = context.getString(R.string.machine_finished_notification_title, machine.name)
         val finalMessage = context.getString(R.string.machine_finished_notification_message, numberOfDrops)
-        showNotification(context, finalTitle, finalMessage)
+        
+        // Pass the machine's unique ID to allow multiple distinct notifications
+        showNotification(context, machine.id, finalTitle, finalMessage)
     }
 }
