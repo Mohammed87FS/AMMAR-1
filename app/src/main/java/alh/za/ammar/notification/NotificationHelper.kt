@@ -32,6 +32,7 @@ const val EXTRA_ALARM_TITLE = "alarm_title"
 const val EXTRA_ALARM_MESSAGE = "alarm_message"
 const val EXTRA_NOTIFICATION_ID = "alarm_notification_id"
 const val EXTRA_SHOW_COMPLETION_NOTIFICATION = "show_completion_notification"
+const val EXTRA_MACHINE_NAME = "machine_name"
 
 fun createNotificationChannel(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -47,23 +48,23 @@ fun createNotificationChannel(context: Context) {
             enableLights(false)
         }
 
-        val channel = NotificationChannel(
+        val alarmChannel = NotificationChannel(
             ALARM_CHANNEL_ID,
             context.getString(R.string.notification_channel_name),
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = context.getString(R.string.notification_channel_description)
-            // The service plays audio directly on the alarm stream, so keep the channel silent.
             setSound(null, null)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             enableVibration(true)
             enableLights(true)
+            setShowBadge(true)
         }
 
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(statusChannel)
-        notificationManager.createNotificationChannel(channel)
+        notificationManager.createNotificationChannel(alarmChannel)
     }
 }
 
@@ -98,11 +99,15 @@ fun buildAlarmNotification(
     message: String,
     notificationId: Int
 ): Notification {
-    val alarmAlertPendingIntent = createAlarmAlertPendingIntent(context, title, message, notificationId)
+    val alarmAlertPendingIntent =
+        createAlarmAlertPendingIntent(context, title, message, notificationId)
+
     return NotificationCompat.Builder(context, ALARM_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-        .setContentTitle(title)
-        .setContentText(message)
+        .setColor(0xFFD32F2F.toInt())
+        .setColorized(true)
+        .setContentTitle("🔴 $title 🔴")
+        .setContentText("⚠️ ALARM — Maschine ist fertig!")
         .setPriority(NotificationCompat.PRIORITY_MAX)
         .setCategory(NotificationCompat.CATEGORY_ALARM)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -123,6 +128,7 @@ fun buildAlarmNotification(
 fun showCompletionNotification(context: Context, title: String, message: String, notificationId: Int) {
     val builder = NotificationCompat.Builder(context, STATUS_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+        .setColor(0xFFD32F2F.toInt())
         .setContentTitle(title)
         .setContentText(message)
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -183,6 +189,7 @@ private fun buildMachineStatusNotification(context: Context, machine: Machine): 
 
     val builder = NotificationCompat.Builder(context, STATUS_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+        .setColor(0xFF4CAF50.toInt())
         .setContentTitle(machine.name)
         .setContentText(contentText)
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -201,12 +208,11 @@ private fun buildMachineStatusNotification(context: Context, machine: Machine): 
             createMachineActionPendingIntent(context, ACTION_RESUME_MACHINE, machine.id)
         )
     } else {
-        builder
-            .addAction(
-                0,
-                context.getString(R.string.pause_action),
-                createMachineActionPendingIntent(context, ACTION_PAUSE_MACHINE, machine.id)
-            )
+        builder.addAction(
+            0,
+            context.getString(R.string.pause_action),
+            createMachineActionPendingIntent(context, ACTION_PAUSE_MACHINE, machine.id)
+        )
     }
 
     return builder.build()
@@ -245,15 +251,12 @@ private fun createAlarmAlertPendingIntent(
     notificationId: Int
 ): PendingIntent {
     val intent = Intent(context, AlarmAlertActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-        putExtra(EXTRA_ALARM_TITLE, title)
-        putExtra(EXTRA_ALARM_MESSAGE, message)
-        putExtra(EXTRA_NOTIFICATION_ID, notificationId)
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
     }
 
     return PendingIntent.getActivity(
         context,
-        notificationId,
+        20_000,
         intent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )

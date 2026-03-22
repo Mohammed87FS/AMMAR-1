@@ -34,7 +34,12 @@ class MachinesViewModel(application: Application) : ViewModel() {
         viewModelScope.launch {
             val updatedMachines = machines.value.map {
                 if (it.id == machine.id) {
-                    it.copy(createdAt = System.currentTimeMillis(), isStopped = false, stoppedAt = null)
+                    it.copy(
+                        createdAt = System.currentTimeMillis(),
+                        currentProducts = 0,
+                        isStopped = false,
+                        stoppedAt = null
+                    )
                 } else {
                     it
                 }

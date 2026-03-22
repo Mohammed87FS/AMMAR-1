@@ -12,18 +12,24 @@ data class Machine(
     val createdAt: Long = System.currentTimeMillis(),
     val name: String,
     val totalProducts: Int,
+    val currentProducts: Int = 0,
     val productsPerDrop: Int,
     val timePerDropInSeconds: Double,
     val isStopped: Boolean = false,
     val stoppedAt: Long? = null
 )
 
+fun Machine.completedProducts(): Int = currentProducts.coerceIn(0, totalProducts.coerceAtLeast(0))
+
+fun Machine.remainingProducts(): Int = (totalProducts - completedProducts()).coerceAtLeast(0)
+
 fun Machine.cycleCount(): Int {
-    if (totalProducts <= 0 || productsPerDrop <= 0) {
+    val remainingProducts = remainingProducts()
+    if (remainingProducts <= 0 || productsPerDrop <= 0) {
         return 0
     }
 
-    return (totalProducts + productsPerDrop - 1) / productsPerDrop
+    return (remainingProducts + productsPerDrop - 1) / productsPerDrop
 }
 
 fun Machine.cycleDurationMillis(): Long = (timePerDropInSeconds * 1000).roundToLong()

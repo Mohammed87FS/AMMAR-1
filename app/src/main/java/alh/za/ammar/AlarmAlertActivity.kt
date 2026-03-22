@@ -1,5 +1,6 @@
 package alh.za.ammar
 
+import android.app.KeyguardManager
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -7,27 +8,32 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import alh.za.ammar.R
-import alh.za.ammar.notification.EXTRA_ALARM_MESSAGE
-import alh.za.ammar.notification.EXTRA_ALARM_TITLE
-import alh.za.ammar.notification.EXTRA_NOTIFICATION_ID
+import androidx.compose.ui.unit.sp
+import alh.za.ammar.notification.AlarmEntry
+import alh.za.ammar.notification.AlarmSoundService
 import alh.za.ammar.notification.stopActiveAlarm
 import alh.za.ammar.ui.theme.AMMARTheme
 
@@ -37,25 +43,33 @@ class AlarmAlertActivity : ComponentActivity() {
         configureLockScreenWindow()
         enableEdgeToEdge()
 
-        val title = intent.getStringExtra(EXTRA_ALARM_TITLE).orEmpty()
-        val message = intent.getStringExtra(EXTRA_ALARM_MESSAGE).orEmpty()
-        val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
-
         setContent {
             AMMARTheme {
+                val queue by AlarmSoundService.alarmQueue.collectAsState()
+
+                if (queue.isEmpty()) {
+                    LaunchedEffect(Unit) {
+                        finish()
+                    }
+                    return@AMMARTheme
+                }
+
+                val currentAlarm = queue.first()
+                val remainingCount = queue.size
+
                 AlarmAlertContent(
-                    title = title,
-                    message = message,
+                    machineName = extractMachineName(currentAlarm.title),
+                    subtitle = currentAlarm.message,
+                    remainingCount = remainingCount,
                     onStopAlarm = {
                         stopActiveAlarm(
                             context = applicationContext,
-                            notificationId = notificationId,
+                            notificationId = currentAlarm.machineId,
                             showCompletionNotification = true
                         )
-                        finish()
                     },
                     onShowMachines = {
-                        startActivity(Intent(this, LockScreenMachinesActivity::class.java))
+                        startActivity(Intent(this@AlarmAlertActivity, LockScreenMachinesActivity::class.java))
                         finish()
                     }
                 )
@@ -75,50 +89,121 @@ class AlarmAlertActivity : ComponentActivity() {
                     WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
             )
         }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val keyguardManager = getSystemService(KeyguardManager::class.java)
+            keyguardManager?.requestDismissKeyguard(this, null)
+        }
+    }
+
+    private fun extractMachineName(title: String): String {
+        val suffix = getString(R.string.machine_finished_suffix)
+        return if (title.endsWith(suffix)) {
+            title.removeSuffix(suffix).trim()
+        } else {
+            title
+        }
     }
 }
 
 @Composable
 private fun AlarmAlertContent(
-    title: String,
-    message: String,
+    machineName: String,
+    subtitle: String,
+    remainingCount: Int,
     onStopAlarm: () -> Unit,
     onShowMachines: () -> Unit
 ) {
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color(0xFFD32F2F)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
+                .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Spacer(modifier = Modifier.weight(0.15f))
+
             Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium,
+                text = "ALARM",
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
+                color = Color.White.copy(alpha = 0.8f),
+                textAlign = TextAlign.Center,
+                letterSpacing = 6.sp
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Box(
+                modifier = Modifier.weight(0.35f),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = machineName,
+                    fontSize = 52.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 58.sp
+                )
+            }
+
+            Text(
+                text = subtitle,
+                fontSize = 18.sp,
+                color = Color.White.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center
             )
-            Text(
-                text = message,
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 12.dp, bottom = 28.dp)
-            )
+
+            if (remainingCount > 1) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.more_alarms_pending, remainingCount - 1),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White.copy(alpha = 0.9f),
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(0.15f))
+
             Button(
                 onClick = onStopAlarm,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFFD32F2F)
+                )
             ) {
-                Text(stringResource(R.string.stop_alarm))
+                Text(
+                    text = stringResource(R.string.stop_alarm),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             OutlinedButton(
                 onClick = onShowMachines,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp)
+                    .height(56.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
             ) {
-                Text(stringResource(R.string.show_machines))
+                Text(
+                    text = stringResource(R.string.show_machines),
+                    fontSize = 16.sp
+                )
             }
+
+            Spacer(modifier = Modifier.weight(0.1f))
         }
     }
 }

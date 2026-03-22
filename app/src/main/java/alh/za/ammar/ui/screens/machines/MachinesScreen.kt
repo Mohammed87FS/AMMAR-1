@@ -2,12 +2,15 @@ package alh.za.ammar.ui.screens.machines
 
 import android.Manifest
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -56,10 +59,12 @@ import alh.za.ammar.R
 import alh.za.ammar.model.Machine
 import alh.za.ammar.model.cycleCount
 import alh.za.ammar.model.cycleDurationMillis
+import alh.za.ammar.model.completedProducts
 import alh.za.ammar.model.finishedAtMillis
 import alh.za.ammar.model.formatClockTime
 import alh.za.ammar.model.isFinished
 import alh.za.ammar.model.totalDurationMillis
+import alh.za.ammar.notification.AlarmSoundService
 import alh.za.ammar.notification.cancelMachineFinishedAlarm
 import alh.za.ammar.notification.cancelMachineNotification
 import alh.za.ammar.notification.stopActiveAlarm
@@ -98,11 +103,23 @@ private fun MachinesScreenApi33AndAbove(viewModel: MachinesViewModel, modifier: 
         mutableStateOf(alarmManager.canScheduleExactAlarms())
     }
 
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    var canUseFullScreenIntent by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+                notificationManager.canUseFullScreenIntent()
+            else true
+        )
+    }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 canScheduleExactAlarms = alarmManager.canScheduleExactAlarms()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    canUseFullScreenIntent = notificationManager.canUseFullScreenIntent()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -121,6 +138,10 @@ private fun MachinesScreenApi33AndAbove(viewModel: MachinesViewModel, modifier: 
             ExactAlarmPermissionRequestScreen(modifier, context)
         }
 
+        !canUseFullScreenIntent -> {
+            FullScreenIntentPermissionScreen(modifier, context)
+        }
+
         else -> {
             MainContent(viewModel, modifier)
         }
@@ -131,9 +152,18 @@ private fun MachinesScreenApi33AndAbove(viewModel: MachinesViewModel, modifier: 
 private fun MachinesScreenBelowApi33(viewModel: MachinesViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     var canScheduleExactAlarms by remember {
         mutableStateOf(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) alarmManager.canScheduleExactAlarms() else true)
+    }
+
+    var canUseFullScreenIntent by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+                notificationManager.canUseFullScreenIntent()
+            else true
+        )
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -143,16 +173,25 @@ private fun MachinesScreenBelowApi33(viewModel: MachinesViewModel, modifier: Mod
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     canScheduleExactAlarms = alarmManager.canScheduleExactAlarms()
                 }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    canUseFullScreenIntent = notificationManager.canUseFullScreenIntent()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    if (canScheduleExactAlarms) {
-        MainContent(viewModel, modifier)
-    } else {
-        ExactAlarmPermissionRequestScreen(modifier, context)
+    when {
+        !canScheduleExactAlarms -> {
+            ExactAlarmPermissionRequestScreen(modifier, context)
+        }
+        !canUseFullScreenIntent -> {
+            FullScreenIntentPermissionScreen(modifier, context)
+        }
+        else -> {
+            MainContent(viewModel, modifier)
+        }
     }
 }
 
@@ -170,6 +209,38 @@ private fun PermissionRequestScreen(modifier: Modifier = Modifier, onGrantClick:
         Spacer(modifier = Modifier.height(8.dp))
         Button(onClick = onGrantClick) {
             Text(stringResource(R.string.grant_permission))
+        }
+    }
+}
+
+@Composable
+private fun FullScreenIntentPermissionScreen(modifier: Modifier = Modifier, context: Context) {
+    Column(
+        modifier = modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            stringResource(R.string.full_screen_intent_permission_request),
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(onClick = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                runCatching {
+                    Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).also {
+                        it.data = Uri.fromParts("package", context.packageName, null)
+                        context.startActivity(it)
+                    }
+                }.onFailure {
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).also {
+                        it.putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        context.startActivity(it)
+                    }
+                }
+            }
+        }) {
+            Text(stringResource(R.string.open_settings))
         }
     }
 }
@@ -202,7 +273,16 @@ private fun ExactAlarmPermissionRequestScreen(modifier: Modifier = Modifier, con
 @Composable
 private fun MainContent(viewModel: MachinesViewModel, modifier: Modifier = Modifier) {
     val machines by viewModel.machines.collectAsState()
+    val alarmingIds by AlarmSoundService.alarmingMachineIds.collectAsState()
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        AlarmSoundService.clearStaleState()
+    }
+
+    val sortedMachines = remember(machines, alarmingIds) {
+        machines.sortedByDescending { it.id in alarmingIds }
+    }
 
     LaunchedEffect(machines) {
         syncMachineStatusNotifications(context, machines)
@@ -256,9 +336,11 @@ private fun MainContent(viewModel: MachinesViewModel, modifier: Modifier = Modif
                 )
             }
 
-            items(machines, key = { it.id }) { machine ->
+            items(sortedMachines, key = { it.id }) { machine ->
+                val isAlarming = machine.id in alarmingIds
                 MachineItem(
                     machine = machine,
+                    isAlarming = isAlarming,
                     onRemove = {
                         stopActiveAlarm(context, machine.id, showCompletionNotification = false)
                         viewModel.removeMachine(machine)
@@ -277,6 +359,9 @@ private fun MainContent(viewModel: MachinesViewModel, modifier: Modifier = Modif
                     onResume = {
                         stopActiveAlarm(context, machine.id, showCompletionNotification = false)
                         viewModel.resumeMachine(machine)
+                    },
+                    onStopAlarm = {
+                        stopActiveAlarm(context, machine.id, showCompletionNotification = false)
                     }
                 )
             }
@@ -288,16 +373,23 @@ private fun MainContent(viewModel: MachinesViewModel, modifier: Modifier = Modif
 private fun AddMachineForm(onAddMachine: (Machine) -> Unit) {
     var machineName by remember { mutableStateOf("") }
     var totalProducts by remember { mutableStateOf("") }
+    var currentProducts by remember { mutableStateOf("") }
     var productsPerDrop by remember { mutableStateOf("") }
     var timePerDropInSeconds by remember { mutableStateOf("") }
     var showValidationError by remember { mutableStateOf(false) }
     val totalProductsInt = totalProducts.toIntOrNull() ?: 0
+    val currentProductsInt = currentProducts.toIntOrNull() ?: 0
     val productsPerDropInt = productsPerDrop.toIntOrNull() ?: 0
     val timePerDropInSecondsDouble = parseLocalizedDecimal(timePerDropInSeconds) ?: 0.0
+    val currentProductsValid = currentProductsInt in 0..totalProductsInt
     val canShowPreview =
-        totalProductsInt > 0 && productsPerDropInt > 0 && timePerDropInSecondsDouble > 0.0
-    val previewCycles = calculateCycleCount(totalProductsInt, productsPerDropInt)
+        totalProductsInt > 0 &&
+            productsPerDropInt > 0 &&
+            timePerDropInSecondsDouble > 0.0 &&
+            currentProductsValid
+    val previewCycles = calculateCycleCount(totalProductsInt, productsPerDropInt, currentProductsInt)
     val previewTotalTime = previewCycles * (timePerDropInSecondsDouble * 1000).roundToLong()
+    val previewEndTime = formatClockTime(System.currentTimeMillis() + previewTotalTime, Locale.GERMANY)
 
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -341,18 +433,34 @@ private fun AddMachineForm(onAddMachine: (Machine) -> Unit) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
-                OutlinedTextField(
-                    value = productsPerDrop,
-                    onValueChange = {
-                        productsPerDrop = it
-                        showValidationError = false
-                    },
-                    label = { Text(stringResource(R.string.products_per_drop)) },
-                    modifier = Modifier.weight(1f),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
-                )
             }
+
+            OutlinedTextField(
+                value = currentProducts,
+                onValueChange = {
+                    currentProducts = it
+                    showValidationError = false
+                },
+                label = { Text(stringResource(R.string.current_products)) },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                supportingText = {
+                    Text(stringResource(R.string.current_products_hint))
+                }
+            )
+
+            OutlinedTextField(
+                value = productsPerDrop,
+                onValueChange = {
+                    productsPerDrop = it
+                    showValidationError = false
+                },
+                label = { Text(stringResource(R.string.products_per_drop)) },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true
+            )
 
             OutlinedTextField(
                 value = timePerDropInSeconds,
@@ -390,23 +498,36 @@ private fun AddMachineForm(onAddMachine: (Machine) -> Unit) {
                             label = stringResource(R.string.preview_total_time_label),
                             value = formatDuration(previewTotalTime)
                         )
+                        MachineInfoRow(
+                            label = stringResource(R.string.preview_end_time_label),
+                            value = previewEndTime
+                        )
                     }
                 }
             }
 
             Button(
                 onClick = {
-                    if (machineName.isNotBlank() && totalProductsInt > 0 && productsPerDropInt > 0 && timePerDropInSecondsDouble > 0) {
+                    if (
+                        machineName.isNotBlank() &&
+                        totalProductsInt > 0 &&
+                        currentProductsInt >= 0 &&
+                        currentProductsInt <= totalProductsInt &&
+                        productsPerDropInt > 0 &&
+                        timePerDropInSecondsDouble > 0
+                    ) {
                         onAddMachine(
                             Machine(
                                 name = machineName,
                                 totalProducts = totalProductsInt,
+                                currentProducts = currentProductsInt,
                                 productsPerDrop = productsPerDropInt,
                                 timePerDropInSeconds = timePerDropInSecondsDouble
                             )
                         )
                         machineName = ""
                         totalProducts = ""
+                        currentProducts = ""
                         productsPerDrop = ""
                         timePerDropInSeconds = ""
                         showValidationError = false
@@ -433,36 +554,68 @@ private fun AddMachineForm(onAddMachine: (Machine) -> Unit) {
 @Composable
 private fun MachineItem(
     machine: Machine,
+    isAlarming: Boolean = false,
     onRemove: () -> Unit,
     onReactivate: () -> Unit,
     onStop: () -> Unit,
-    onResume: () -> Unit
+    onResume: () -> Unit,
+    onStopAlarm: () -> Unit = {}
 ) {
+    val completedProducts = machine.completedProducts()
     val numberOfCycles = machine.cycleCount()
     val timePerCycle = machine.cycleDurationMillis()
     val totalTime = machine.totalDurationMillis()
-    val expectedProducts15Min = calculateExpectedProducts(machine.totalProducts, machine.productsPerDrop, machine.timePerDropInSeconds, 15)
-    val expectedProducts30Min = calculateExpectedProducts(machine.totalProducts, machine.productsPerDrop, machine.timePerDropInSeconds, 30)
-    val expectedProducts60Min = calculateExpectedProducts(machine.totalProducts, machine.productsPerDrop, machine.timePerDropInSeconds, 60)
+    val expectedProducts15Min = calculateExpectedProducts(
+        currentProducts = completedProducts,
+        totalProducts = machine.totalProducts,
+        productsPerDrop = machine.productsPerDrop,
+        timePerDropInSeconds = machine.timePerDropInSeconds,
+        durationMinutes = 15
+    )
+    val expectedProducts30Min = calculateExpectedProducts(
+        currentProducts = completedProducts,
+        totalProducts = machine.totalProducts,
+        productsPerDrop = machine.productsPerDrop,
+        timePerDropInSeconds = machine.timePerDropInSeconds,
+        durationMinutes = 30
+    )
+    val expectedProducts60Min = calculateExpectedProducts(
+        currentProducts = completedProducts,
+        totalProducts = machine.totalProducts,
+        productsPerDrop = machine.productsPerDrop,
+        timePerDropInSeconds = machine.timePerDropInSeconds,
+        durationMinutes = 60
+    )
     val isFinishedNow = machine.isFinished()
 
     val statusLabel = when {
+        isAlarming -> stringResource(R.string.status_alarming)
         isFinishedNow -> stringResource(R.string.status_finished)
         machine.isStopped -> stringResource(R.string.status_paused)
         else -> stringResource(R.string.status_running)
     }
     val statusContainerColor = when {
+        isAlarming -> Color(0xFFD32F2F)
         isFinishedNow -> MaterialTheme.colorScheme.primaryContainer
         machine.isStopped -> MaterialTheme.colorScheme.tertiaryContainer
         else -> MaterialTheme.colorScheme.secondaryContainer
     }
     val statusContentColor = when {
+        isAlarming -> Color.White
         isFinishedNow -> MaterialTheme.colorScheme.onPrimaryContainer
         machine.isStopped -> MaterialTheme.colorScheme.onTertiaryContainer
         else -> MaterialTheme.colorScheme.onSecondaryContainer
     }
 
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+    val cardModifier = if (isAlarming) {
+        Modifier
+            .fillMaxWidth()
+            .border(BorderStroke(3.dp, Color(0xFFD32F2F)), MaterialTheme.shapes.medium)
+    } else {
+        Modifier.fillMaxWidth()
+    }
+
+    ElevatedCard(modifier = cardModifier) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -492,6 +645,21 @@ private fun MachineItem(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+            }
+
+            if (isAlarming) {
+                Button(
+                    onClick = onStopAlarm,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text(
+                        stringResource(R.string.stop_alarm),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
             }
 
             Row(
@@ -552,6 +720,10 @@ private fun MachineItem(
                         value = machine.totalProducts.toString()
                     )
                     MachineInfoRow(
+                        label = stringResource(R.string.current_products_label),
+                        value = completedProducts.toString()
+                    )
+                    MachineInfoRow(
                         label = stringResource(R.string.products_per_drop_label),
                         value = machine.productsPerDrop.toString()
                     )
@@ -573,7 +745,8 @@ private fun MachineItem(
                             stringResource(R.string.end_time_after_resume)
                         } else {
                             formatClockTime(machine.finishedAtMillis(), Locale.GERMANY)
-                        }
+                        },
+                        stacked = machine.isStopped
                     )
                 }
             }
@@ -631,7 +804,25 @@ private fun EmptyMachinesCard() {
 }
 
 @Composable
-private fun MachineInfoRow(label: String, value: String) {
+private fun MachineInfoRow(label: String, value: String, stacked: Boolean = false) {
+    if (stacked) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        return
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -702,26 +893,29 @@ private fun parseLocalizedDecimal(input: String): Double? {
     return input.replace(',', '.').toDoubleOrNull()
 }
 
-private fun calculateCycleCount(totalProducts: Int, productsPerDrop: Int): Int {
-    if (totalProducts <= 0 || productsPerDrop <= 0) {
+private fun calculateCycleCount(totalProducts: Int, productsPerDrop: Int, currentProducts: Int = 0): Int {
+    val remainingProducts = (totalProducts - currentProducts.coerceAtLeast(0)).coerceAtLeast(0)
+    if (remainingProducts <= 0 || productsPerDrop <= 0) {
         return 0
     }
 
-    return (totalProducts + productsPerDrop - 1) / productsPerDrop
+    return (remainingProducts + productsPerDrop - 1) / productsPerDrop
 }
 
 private fun calculateExpectedProducts(
+    currentProducts: Int,
     totalProducts: Int,
     productsPerDrop: Int,
     timePerDropInSeconds: Double,
     durationMinutes: Int
 ): Int {
-    if (totalProducts <= 0 || productsPerDrop <= 0 || timePerDropInSeconds <= 0.0) {
-        return 0
+    val completedProducts = currentProducts.coerceIn(0, totalProducts)
+    if (totalProducts <= 0 || productsPerDrop <= 0 || timePerDropInSeconds <= 0.0 || completedProducts >= totalProducts) {
+        return completedProducts
     }
 
     val completedDrops = floor((durationMinutes * 60) / timePerDropInSeconds).toInt()
-    return (completedDrops * productsPerDrop).coerceAtMost(totalProducts)
+    return (completedProducts + completedDrops * productsPerDrop).coerceAtMost(totalProducts)
 }
 
 @Preview(showBackground = true)

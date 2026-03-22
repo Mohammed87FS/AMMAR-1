@@ -9,10 +9,12 @@
     <string name="empty_state_message">Fügen Sie oben eine Maschine hinzu, um Laufzeit und voraussichtliche Stückzahl live zu sehen.</string>
     <string name="preview_title">Vorschau</string>
     <string name="preview_cycles_label">Anzahl Zyklen:</string>
-    <string name="preview_total_time_label">Voraussichtliche Gesamtzeit:</string>
+    <string name="preview_total_time_label">Verbleibende Laufzeit:</string>
+    <string name="preview_end_time_label">Endet um:</string>
     <string name="status_running">Läuft</string>
     <string name="status_paused">Pausiert</string>
     <string name="status_finished">Fertig</string>
+    <string name="status_alarming">ALARM</string>
     <string name="lock_screen_overview_title">Maschinen Endzeiten</string>
     <string name="lock_screen_overview_subtitle">Ohne Entsperren sehen, wann die Maschinen enden.</string>
     <string name="lock_screen_empty_state">Keine aktive Maschine vorhanden.</string>
@@ -23,10 +25,12 @@
     <string name="end_time_after_resume">Wird nach dem Fortsetzen neu berechnet.</string>
     <string name="machine_name">Maschinenname</string>
     <string name="total_products">Gesamtstückzahl</string>
+    <string name="current_products">Aktuelle Stückzahl</string>
+    <string name="current_products_hint">Leer lassen = 0 bereits gefertigte Teile</string>
     <string name="products_per_drop">Kavitäten (Stück pro Zyklus)</string>
     <string name="time_per_drop_in_seconds">Zykluszeit (Sekunden)</string>
     <string name="time_per_drop_hint">Kommazahlen sind erlaubt, z. B. 2,5 oder 2.5</string>
-    <string name="error_all_fields_positive">Bitte füllen Sie alle Felder mit gültigen positiven Werten aus.</string>
+    <string name="error_all_fields_positive">Bitte füllen Sie alle Felder mit gültigen Werten aus. Die aktuelle Stückzahl darf nicht größer als die Gesamtstückzahl sein.</string>
     <string name="add_machine">Maschine hinzufügen</string>
     <string name="remove">Entfernen</string>
     <string name="reactivate">Reaktivieren</string>
@@ -35,10 +39,11 @@
     <string name="pause_action">Pause</string>
     <string name="resume">Fortsetzen</string>
     <string name="total_products_label">Stückanzahl:</string>
+    <string name="current_products_label">Aktuelle Stückzahl:</string>
     <string name="products_per_drop_label">Kavitäten:</string>
     <string name="time_per_drop_label">Zykluszeit:</string>
-    <string name="number_of_drops_label">Anzahl Zyklen:</string>
-    <string name="total_time_label">Gesamtzeit:</string>
+    <string name="number_of_drops_label">Verbleibende Zyklen:</string>
+    <string name="total_time_label">Verbleibende Laufzeit:</string>
     <string name="time_remaining_label">Restlaufzeit:</string>
     <string name="forecast_section_title">Voraussichtliche Stückzahl</string>
     <string name="forecast_15_min_label">In 15 Min:</string>
@@ -51,11 +56,14 @@
     <string name="finished">Fertig</string>
     <string name="notification_permission_request">Diese App benötigt die Berechtigung, Benachrichtigungen anzuzeigen, um Sie zu benachrichtigen, wenn die Aufgabe einer Maschine abgeschlossen ist.</string>
     <string name="grant_permission">Berechtigung erteilen</string>
+    <string name="full_screen_intent_permission_request">Damit der Alarmbildschirm automatisch angezeigt wird, muss die Berechtigung \"Vollbildbenachrichtigungen\" aktiviert sein. Bitte in den Einstellungen aktivieren.</string>
     <string name="exact_alarm_permission_request">Diese App benötigt eine spezielle Berechtigung, um exakte Alarme zu planen. Bitte erteilen Sie diese in den Systemeinstellungen.</string>
     <string name="open_settings">Einstellungen öffnen</string>
     <string name="drop_complete_notification_title">%1$s Zyklus abgeschlossen</string>
     <string name="drop_complete_notification_message">Zyklus %1$d von %2$d ist abgeschlossen.</string>
     <string name="machine_finished_notification_title">%1$s fertig</string>
+    <string name="machine_finished_suffix"> fertig</string>
+    <string name="more_alarms_pending">+ %1$d weitere Alarme</string>
     <string name="machine_finished_notification_message">Alle %1$d Zyklen sind abgeschlossen. Die Maschine ist fertig.</string>
     <string name="machine_running_notification_message">Läuft · endet um %1$s</string>
     <string name="machine_paused_notification_message">Pausiert · wird nach dem Fortsetzen neu berechnet</string>
